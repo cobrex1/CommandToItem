@@ -1,6 +1,8 @@
 package com.leonardobishop.commandtoitem.utils.itemgetter;
 
-import org.bukkit.ChatColor;
+import com.leonardobishop.commandtoitem.utils.StringUtils;
+import me.arcaniax.hdb.api.HeadDatabaseAPI;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
@@ -19,191 +21,259 @@ import java.util.Map;
 import java.util.UUID;
 
 public class ItemGetterLatest implements ItemGetter {
+	StringUtils stringUtils = new StringUtils();
 
-    /*
-    item reader for 1.14+ ONLY
+	/*
+	item reader for 1.14+ ONLY
 
-    supporting:
-     - name
-     - material
-     - lore
-     - enchantments (NamespacedKey)
-     - itemflags
-     - unbreakable
-     - attribute modifier
-     - custom model data
-     */
-    @Override
-    public ItemStack getItem(String path, FileConfiguration config, JavaPlugin plugin) {
-        String cName = config.getString(path + ".name", path + ".name");
-        String cType = config.getString(path + ".item", path + ".item");
-        boolean hasCustomModelData = config.contains(path + ".custommodeldata");
-        int customModelData = config.getInt(path + ".custommodeldata", 0);
-        boolean unbreakable = config.getBoolean(path + ".unbreakable", false);
-        List<String> cLore = config.getStringList(path + ".lore");
-        List<String> cItemFlags = config.getStringList(path + ".itemflags");
-        boolean hasAttributeModifiers = config.contains(path + ".attributemodifiers");
-        List<Map<?, ?>> cAttributeModifiers = config.getMapList(path + ".attributemodifiers");
+	supporting:
+	 - name
+	 - material
+	 - lore
+	 - enchantments (NamespacedKey)
+	 - itemflags
+	 - unbreakable
+	 - attribute modifier
+	 - custom model data
+	 - using HeadsDatabase items
+	 */
+	@Override
+	public ItemStack getItem(String path, FileConfiguration config, JavaPlugin plugin) {
+		String cName = config.getString(path + ".name", path + ".name");
+		String cType = config.getString(path + ".item", path + ".item");
+		boolean hasCustomModelData = config.contains(path + ".custommodeldata");
+		int customModelData = config.getInt(path + ".custommodeldata", 0);
+		boolean unbreakable = config.getBoolean(path + ".unbreakable", false);
+		List<String> cLore = config.getStringList(path + ".lore");
+		List<String> cItemFlags = config.getStringList(path + ".itemflags");
+		boolean hasAttributeModifiers = config.contains(path + ".attributemodifiers");
+		List<Map<?, ?>> cAttributeModifiers = config.getMapList(path + ".attributemodifiers");
+		if (cType != null && cType.toLowerCase().startsWith("hdb:")) {
+			String headId = cType.substring(4);
 
-        String name;
-        Material type = null;
-        int data = 0;
+			if (Bukkit.getPluginManager().getPlugin("HeadDatabase") != null) {
+				HeadDatabaseAPI hdbApi = new HeadDatabaseAPI();
+				ItemStack head = hdbApi.getItemHead(headId);
 
-        // lore
-        List<String> lore = new ArrayList<>();
-        if (cLore != null) {
-            for (String s : cLore) {
-                lore.add(ChatColor.translateAlternateColorCodes('&', s));
-            }
-        }
+				if (head != null) {
+					ItemMeta meta = head.getItemMeta();
+					if (meta != null) {
+						if (cName != null && !cName.isEmpty()) {
+							meta.setDisplayName(stringUtils.addColor(cName));
+						}
+						if (cLore != null && !cLore.isEmpty()) {
+							List<String> lore = new ArrayList<>();
+							for (String line : cLore) {
+								lore.add(stringUtils.addColor(line));
+							}
+							meta.setLore(lore);
+						}
+						if (hasCustomModelData) {
+							meta.setCustomModelData(customModelData);
+						}
+						meta.setUnbreakable(unbreakable);
+						for (String flagName : cItemFlags) {
+							try {
+								ItemFlag flag = ItemFlag.valueOf(flagName.toUpperCase());
+								meta.addItemFlags(flag);
+							} catch (IllegalArgumentException ignored) {
+								plugin.getLogger().warning("Unknown item flag: " + flagName);
+							}
+						}
+						if (hasAttributeModifiers) {
+							for (Map<?, ?> modMap : cAttributeModifiers) {
+								try {
+									String attributeName = (String) modMap.get("attribute");
+									String slot = (String) modMap.get("slot");
+									String operation = (String) modMap.get("operation");
+									double amount = Double.parseDouble(modMap.get("amount").toString());
 
-        // name
-        name = ChatColor.translateAlternateColorCodes('&', cName);
+									Attribute attribute = Attribute.valueOf(attributeName.toUpperCase());
+									AttributeModifier.Operation op = AttributeModifier.Operation.valueOf(operation.toUpperCase());
 
-        // material
-        try {
-            type = Material.valueOf(cType);
-        } catch (Exception e) {
-            plugin.getLogger().warning("Unrecognised material: " + cType);
-            type = Material.STONE;
-        }
+									AttributeModifier modifier = new AttributeModifier(
+											UUID.randomUUID(),
+											attributeName,
+											amount,
+											op,
+											EquipmentSlot.valueOf(slot.toUpperCase())
+									);
 
-        ItemStack is = new ItemStack(type, 1, (short) data);
-        ItemMeta ism = is.getItemMeta();
-        ism.setLore(lore);
-        ism.setDisplayName(name);
+									meta.addAttributeModifier(attribute, modifier);
+								} catch (Exception e) {
+									plugin.getLogger().warning("Invalid attribute modifier in config: " + e.getMessage());
+								}
+							}
+						}
+						head.setItemMeta(meta);
+					}
 
-        // custom model data
-        if (hasCustomModelData) {
-            ism.setCustomModelData(customModelData);
-        }
+					return head;
+				}
+			}
 
-        // attribute modifiers
-        if (hasAttributeModifiers) {
-            for (Map<?, ?> attr : cAttributeModifiers) {
-                String cAttribute = (String) attr.get("attribute");
-                Attribute attribute = null;
-                for (Attribute enumattr : Attribute.values()) {
-                    if (enumattr.toString().equals(cAttribute)) {
-                        attribute = enumattr;
-                        break;
-                    }
-                }
+			plugin.getLogger().warning("HeadsDatabase plugin not found or head not found: " + headId);
+			return new ItemStack(Material.BARRIER);
+		}
 
-                if (attribute == null) continue;
+		String name;
+		Material type = null;
+		int data = 0;
 
-                Map<?, ?> configurationSection = (Map<?, ?>) attr.get("modifier");
+		// lore
+		List<String> lore = new ArrayList<>();
+		if (cLore != null) {
+			for (String s : cLore) {
+				lore.add(new StringUtils().addColor(s));
+			}
+		}
 
-                String cUUID = (String) configurationSection.get("uuid");
-                String cModifierName = (String) configurationSection.get("name");
-                String cModifierOperation = (String) configurationSection.get("operation");
-                double cAmount;
-                try {
-                    Object cAmountObj = configurationSection.get("amount");
-                    if (cAmountObj instanceof Integer) {
-                        cAmount = ((Integer) cAmountObj).doubleValue();
-                    } else {
-                        cAmount = (Double) cAmountObj;
-                    }
-                } catch (Exception e) {
-                    cAmount = 1;
-                }
-                String cEquipmentSlot = (String) configurationSection.get("equipmentslot");
+		// name
+		name = new StringUtils().addColor(cName);
 
-                UUID uuid = null;
-                if (cUUID != null) {
-                    try {
-                        uuid = UUID.fromString(cUUID);
-                    } catch (Exception ignored) {
-                        // ignored
-                    }
-                }
-                EquipmentSlot equipmentSlot = null;
-                if (cEquipmentSlot != null) {
-                    try {
-                        equipmentSlot = EquipmentSlot.valueOf(cEquipmentSlot);
-                    } catch (Exception ignored) {
-                        // ignored
-                    }
-                }
-                AttributeModifier.Operation operation = AttributeModifier.Operation.ADD_NUMBER;
-                try {
-                    operation = AttributeModifier.Operation.valueOf(cModifierOperation);
-                } catch (Exception ignored) {
-                    // ignored
-                }
+		// material
+		try {
+			type = Material.valueOf(cType);
+		} catch (Exception e) {
+			plugin.getLogger().warning("Unrecognised material [latest]: " + cType);
+			type = Material.STONE;
+		}
 
-                AttributeModifier modifier;
-                if (uuid == null) {
-                    modifier = new AttributeModifier(cModifierName, cAmount, operation);
-                } else if (equipmentSlot == null) {
-                    modifier = new AttributeModifier(uuid, cModifierName, cAmount, operation);
-                } else {
-                    modifier = new AttributeModifier(uuid, cModifierName, cAmount, operation, equipmentSlot);
-                }
+		ItemStack is = new ItemStack(type, 1, (short) data);
+		ItemMeta ism = is.getItemMeta();
+		ism.setLore(lore);
+		ism.setDisplayName(name);
 
-                ism.addAttributeModifier(attribute, modifier);
-            }
-        }
+		// custom model data
+		if (hasCustomModelData) {
+			ism.setCustomModelData(customModelData);
+		}
 
-        // item flags
-        if (config.isSet(path + ".itemflags")) {
-            for (String flag : cItemFlags) {
-                for (ItemFlag iflag : ItemFlag.values()) {
-                    if (iflag.toString().equals(flag)) {
-                        ism.addItemFlags(iflag);
-                        break;
-                    }
-                }
-            }
-        }
+		// attribute modifiers
+		if (hasAttributeModifiers) {
+			for (Map<?, ?> attr : cAttributeModifiers) {
+				String cAttribute = (String) attr.get("attribute");
+				Attribute attribute = null;
+				for (Attribute enumattr : Attribute.values()) {
+					if (enumattr.toString().equals(cAttribute)) {
+						attribute = enumattr;
+						break;
+					}
+				}
 
+				if (attribute == null) continue;
 
-        // unbreakable
-        ism.setUnbreakable(unbreakable);
+				Map<?, ?> configurationSection = (Map<?, ?>) attr.get("modifier");
 
-        // enchantments
-        if (config.isSet(path + ".enchantments")) {
-            for (String key : config.getStringList(path + ".enchantments")) {
-                String[] split = key.split(":");
-                if (split.length < 2) {
-                    plugin.getLogger().warning("Enchantment does not follow format {namespace}:{name}:{level} : " + key);
-                    continue;
-                }
-                String namespace = split[0];
-                String ench = split[1];
-                String levelName;
-                if (split.length >= 3) {
-                    levelName = split[2];
-                } else {
-                    levelName = "1";
-                }
+				String cUUID = (String) configurationSection.get("uuid");
+				String cModifierName = (String) configurationSection.get("name");
+				String cModifierOperation = (String) configurationSection.get("operation");
+				double cAmount;
+				try {
+					Object cAmountObj = configurationSection.get("amount");
+					if (cAmountObj instanceof Integer) {
+						cAmount = ((Integer) cAmountObj).doubleValue();
+					} else {
+						cAmount = (Double) cAmountObj;
+					}
+				} catch (Exception e) {
+					cAmount = 1;
+				}
+				String cEquipmentSlot = (String) configurationSection.get("equipmentslot");
 
-                NamespacedKey namespacedKey;
-                try {
-                    namespacedKey = new NamespacedKey(namespace, ench);
-                } catch (Exception e) {
-                    plugin.getLogger().warning("Unrecognised namespace: " + namespace);
-                    continue;
-                }
-                Enchantment enchantment;
-                if ((enchantment = Enchantment.getByKey(namespacedKey)) == null) {
-                    plugin.getLogger().warning("Unrecognised enchantment: " + namespacedKey);
-                    continue;
-                }
+				UUID uuid = null;
+				if (cUUID != null) {
+					try {
+						uuid = UUID.fromString(cUUID);
+					} catch (Exception ignored) {
+						// ignored
+					}
+				}
+				EquipmentSlot equipmentSlot = null;
+				if (cEquipmentSlot != null) {
+					try {
+						equipmentSlot = EquipmentSlot.valueOf(cEquipmentSlot);
+					} catch (Exception ignored) {
+						// ignored
+					}
+				}
+				AttributeModifier.Operation operation = AttributeModifier.Operation.ADD_NUMBER;
+				try {
+					operation = AttributeModifier.Operation.valueOf(cModifierOperation);
+				} catch (Exception ignored) {
+					// ignored
+				}
 
-                int level;
-                try {
-                    level = Integer.parseInt(levelName);
-                } catch (NumberFormatException e) {
-                    level = 1;
-                }
+				AttributeModifier modifier;
+				if (uuid == null) {
+					modifier = new AttributeModifier(cModifierName, cAmount, operation);
+				} else if (equipmentSlot == null) {
+					modifier = new AttributeModifier(uuid, cModifierName, cAmount, operation);
+				} else {
+					modifier = new AttributeModifier(uuid, cModifierName, cAmount, operation, equipmentSlot);
+				}
 
-                ism.addEnchant(enchantment, level, true);
-            }
-        }
+				ism.addAttributeModifier(attribute, modifier);
+			}
+		}
 
-        is.setItemMeta(ism);
-        return is;
-    }
+		// item flags
+		if (config.isSet(path + ".itemflags")) {
+			for (String flag : cItemFlags) {
+				for (ItemFlag iflag : ItemFlag.values()) {
+					if (iflag.toString().equals(flag)) {
+						ism.addItemFlags(iflag);
+						break;
+					}
+				}
+			}
+		}
+
+		// unbreakable
+		ism.setUnbreakable(unbreakable);
+
+		// enchantments
+		if (config.isSet(path + ".enchantments")) {
+			for (String key : config.getStringList(path + ".enchantments")) {
+				String[] split = key.split(":");
+				if (split.length < 2) {
+					plugin.getLogger().warning("Enchantment does not follow format {namespace}:{name}:{level} : " + key);
+					continue;
+				}
+				String namespace = split[0];
+				String ench = split[1];
+				String levelName;
+				if (split.length >= 3) {
+					levelName = split[2];
+				} else {
+					levelName = "1";
+				}
+
+				NamespacedKey namespacedKey;
+				try {
+					namespacedKey = new NamespacedKey(namespace, ench);
+				} catch (Exception e) {
+					plugin.getLogger().warning("Unrecognised namespace: " + namespace);
+					continue;
+				}
+				Enchantment enchantment;
+				if ((enchantment = Enchantment.getByKey(namespacedKey)) == null) {
+					plugin.getLogger().warning("Unrecognised enchantment: " + namespacedKey);
+					continue;
+				}
+
+				int level;
+				try {
+					level = Integer.parseInt(levelName);
+				} catch (NumberFormatException e) {
+					level = 1;
+				}
+
+				ism.addEnchant(enchantment, level, true);
+			}
+		}
+
+		is.setItemMeta(ism);
+		return is;
+	}
 }

@@ -22,7 +22,7 @@ public class UseItem implements Listener {
     public void onPlayerUse(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         if (event.getItem() != null && event.getItem().getType() != Material.AIR) {
-            ItemStack is = player.getItemInHand();
+            ItemStack is = player.getPlayer().getInventory().getItemInMainHand();
 
             Item item = null;
             for (Item i : plugin.getItems()) {
@@ -49,11 +49,11 @@ public class UseItem implements Listener {
                 }
                 if (item.isConsumed()) {
                     if (is.getAmount() == 1) {
-                        player.setItemInHand(null);
+                        player.getPlayer().getInventory().setItemInMainHand(null);
                     } else {
                         int newAmount = is.getAmount() - 1;
                         is.setAmount(newAmount);
-                        player.setItemInHand(is);
+                        player.getPlayer().getInventory().setItemInMainHand(is);
                     }
                     player.updateInventory();
                 }

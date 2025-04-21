@@ -12,7 +12,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
 
 public class ItemGetter_Late_1_8 implements ItemGetter {
@@ -64,7 +63,7 @@ public class ItemGetter_Late_1_8 implements ItemGetter {
         }
 
         if (type == null) {
-            plugin.getLogger().warning("Unrecognised material: " + cType);
+            plugin.getLogger().warning("Unrecognised material 1.8: " + cType);
             type = Material.STONE;
         }
 

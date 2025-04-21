@@ -31,6 +31,9 @@ public class CommandToItem extends JavaPlugin {
             directory.mkdir();
         }
 
+        if (hasHDB()) getServer().getConsoleSender().
+                sendMessage(ChatColor.DARK_GREEN + "[TownyMenu] " + ChatColor.WHITE + "HeadDatabase Hooked!");
+
         metrics = new Metrics(this);
         if (metrics.isEnabled()) {
             this.getLogger().log(Level.INFO, "Metrics started. This can be disabled at /plugins/bStats/config.yml.");
@@ -111,7 +114,8 @@ public class CommandToItem extends JavaPlugin {
     private void executeVersionSpecificActions() {
         String version;
         try {
-            version = Bukkit.getServer().getClass().getPackage().getName().replace(".", ",").split(",")[3];
+            version = Bukkit.getBukkitVersion();
+//            version = Bukkit.getServer().getClass().getPackage().getName().replace(".", ",").split(",")[3];
         } catch (ArrayIndexOutOfBoundsException e) {
             getLogger().warning("Failed to resolve server version - some features will not work!");
             itemGetter = new ItemGetter_Late_1_8();
@@ -119,10 +123,12 @@ public class CommandToItem extends JavaPlugin {
         }
 
         getLogger().info("Your server is running version " + version + ".");
-        if (version.startsWith("v1_7") || version.startsWith("v1_8") || version.startsWith("v1_9")
-                || version.startsWith("v1_10") || version.startsWith("v1_11") || version.startsWith("v1_12")) {
+        if (version.startsWith("1.7") || version.startsWith("1.8") || version.startsWith("1.9")
+        || version.startsWith("1.10") || version.startsWith("1.11") || version.startsWith("1.12")) {
+//        if (version.startsWith("v1_7") || version.startsWith("v1_8") || version.startsWith("v1_9")
+//                || version.startsWith("v1_10") || version.startsWith("v1_11") || version.startsWith("v1_12")) {
             itemGetter = new ItemGetter_Late_1_8();
-        } else if (version.startsWith("v1_13")) {
+        } else if (version.startsWith("1.13")) {
             itemGetter = new ItemGetter_1_13();
         } else {
             itemGetter = new ItemGetterLatest();
@@ -160,4 +166,7 @@ public class CommandToItem extends JavaPlugin {
         }
     }
 
+    public boolean hasHDB() {
+        return Bukkit.getServer().getPluginManager().getPlugin("HeadDatabase") != null;
+    }
 }

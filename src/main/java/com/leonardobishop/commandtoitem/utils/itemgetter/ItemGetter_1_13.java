@@ -1,5 +1,7 @@
 package com.leonardobishop.commandtoitem.utils.itemgetter;
 
+import me.arcaniax.hdb.api.HeadDatabaseAPI;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -35,6 +37,24 @@ public class ItemGetter_1_13 implements ItemGetter {
     public ItemStack getItem(String path, FileConfiguration config, JavaPlugin plugin) {
         String cName = config.getString(path + ".name", path + ".name");
         String cType = config.getString(path + ".item", path + ".item");
+        if (cType != null && cType.toLowerCase().startsWith("hdb:")) {
+            String headId = cType.substring(4);
+
+            if (Bukkit.getPluginManager().getPlugin("HeadDatabase") != null) {
+                HeadDatabaseAPI hdbApi = new HeadDatabaseAPI();
+                ItemStack head = hdbApi.getItemHead(headId);
+
+                if (head != null) {
+                    return head;
+                } else {
+                    plugin.getLogger().warning("HeadsDatabase: Could not find head with ID: " + headId);
+                    return new ItemStack(Material.STONE);
+                }
+            } else {
+                plugin.getLogger().warning("HeadsDatabase plugin not found!");
+                return new ItemStack(Material.BARRIER);
+            }
+        }
         boolean unbreakable = config.getBoolean(path + ".unbreakable", false);
         List<String> cLore = config.getStringList(path + ".lore");
         List<String> cItemFlags = config.getStringList(path + ".itemflags");
@@ -60,7 +80,7 @@ public class ItemGetter_1_13 implements ItemGetter {
         try {
             type = Material.valueOf(cType);
         } catch (Exception e) {
-            plugin.getLogger().warning("Unrecognised material: " + cType);
+            plugin.getLogger().warning("Unrecognised material 1.13: " + cType);
             type = Material.STONE;
         }
 
